@@ -3,7 +3,9 @@ package models
 //contact
 
 type Contact struct {
-	ID		int32	`json:"id"`
-	Title	string	`json:"title"` 
-	Completion	bool `json:"isConplete"`
+	ID int64 `json:"id"`
+	Name 	string 	`json:"name"`
+	Phone_Number string `json:"phone_number"`
+	Date_Of_Birth string	`json:"date_of_birth"`
+	Remark 	string	`json:"remark"`
 }
