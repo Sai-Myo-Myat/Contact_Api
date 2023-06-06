@@ -3,8 +3,8 @@ package middlewares
 import (
 	"contact-api/models"
 	"context"
+	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -46,8 +46,6 @@ func createConnection() *sqlx.DB {
 	if err != nil {
 		panic(err)
 	}
-
-	fmt.Println("Successfully connected")
 
 	return db;
 }
@@ -185,6 +183,52 @@ func UpdateContacts(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(res)
 }
 
+func DeleteContact(w http.ResponseWriter, r * http.Request){
+	ctx := r.Context();
+	idString := mux.Vars(r)["id"];
+
+	id, err := strconv.ParseInt(idString, 10, 64);
+	var res response;
+	if err != nil {
+		res = response{
+			Status: 403,
+			Message: err.Error(),
+		}
+	}
+
+	result, err := deleteContact(ctx, id);
+
+
+	if  err != nil {
+		res = response{
+			Status: 404,
+			Message: err.Error(),
+		}
+	}
+
+	rowsAffected, err	:= result.RowsAffected()
+
+	if  err != nil {
+		res = response{
+			Status: 404,
+			Message: err.Error(),
+		}
+	}else if rowsAffected == 0{
+		res = response{
+			Status: 404,
+			Message: "There is no contact with this id",
+		}
+	}else {
+		res = response{
+			Status: 200,
+			Message: "Deleted contact successfully",
+			ID: id,
+		}
+	}
+
+	json.NewEncoder(w).Encode(res);
+}
+
 ///DATABASE FUNCTIONS
 
 //get all contacts
@@ -250,4 +294,21 @@ func updateContact(ctx context.Context, contact models.Contact)  error{
 
 
 	return err;
+}
+
+//delete contact 
+func deleteContact(ctx context.Context, id int64) (sql.Result, error) {
+	db := createConnection();
+
+	defer db.Close()
+
+	queryStatement := `DELETE FROM contacts WHERE id = $1`;
+
+	result, err := db.ExecContext(ctx, queryStatement, id); 
+
+	if err != nil {
+		return nil, err;
+	}
+
+	return result, nil;
 }
