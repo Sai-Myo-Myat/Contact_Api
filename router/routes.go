@@ -12,6 +12,7 @@ func Router() *mux.Router {
 	r.HandleFunc("/api/contacts", middlewares.GetAllContacts).Methods("GET")
 	r.HandleFunc("/api/contacts", middlewares.CreateContact).Methods("POST")
 	r.HandleFunc("/api/contacts/{id}", middlewares.GetContact).Methods("GET")
+	r.HandleFunc("/api/contacts/{id}", middlewares.UpdateContacts).Methods("PUT")
 
 	return r;
 }

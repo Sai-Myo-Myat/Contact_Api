@@ -26,15 +26,7 @@ type response struct {
 type contactResponse struct {
 	Status int	`json:"status"`
 	Message string `json:"message"`
-	Data *Contact  `json:"data"`
-}
-
-type Contact struct {
-	ID int64	`json:"id" db:"id"`
-	Name string 	`json:"name" db:"name"`
-	PhoneNumber string `json:"phone_number" db:"phone_number"`
-	DateOfBirth string `json:"date_of_birth" db:"date_of_birth"`
-	Remark string `json:"remark" db:"remark"`
+	Data *models.Contact  `json:"data"`
 }
 
 func createConnection() *sqlx.DB {
@@ -97,8 +89,6 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 
 	id, err := strconv.ParseInt(idString, 10, 64)
 
-	fmt.Println(id)
-
 	if err != nil {
 		res = contactResponse {
 			Status: 403,
@@ -108,7 +98,7 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 
 	contact, err := getContact(ctx, id)
 
-	fmt.Println("contact", contact, "error", err, "getContact")
+	// fmt.Println("contact", contact, "error", err, "getContact")
 
 	if err != nil {
 		res = contactResponse{
@@ -117,7 +107,7 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 		}
 	}else {
 		res = contactResponse{
-			Status: 404,
+			Status: 200,
 			Message: "Success",
 			Data: contact,
 		}
@@ -157,6 +147,44 @@ func CreateContact(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(res)
 }
 
+//update contact
+func UpdateContacts(w http.ResponseWriter, r *http.Request){
+	idString := mux.Vars(r)["id"]
+	id, err := strconv.ParseInt(idString, 10, 64);
+
+	var res response
+	ctx := r.Context()
+	var contact models.Contact
+
+	json.NewDecoder(r.Body).Decode(&contact)
+
+	contact.ID = id;
+
+	if err != nil {
+		res = response{
+			Status: 403,
+			Message: err.Error(),
+		}
+	}
+
+	err = updateContact(ctx, contact)
+
+	if err != nil {
+		res = response{
+			Status: 404,
+			Message: err.Error(),
+		}
+	}else {
+		res = response{
+			Status: 200,
+			Message: "Success",
+			ID: id,
+		}
+	}
+
+	json.NewEncoder(w).Encode(res)
+}
+
 ///DATABASE FUNCTIONS
 
 //get all contacts
@@ -171,25 +199,25 @@ func getAllContacts(contacts *[]models.Contact) error {
 }
 
 //get one contact
-func getContact(ctx context.Context, id int64) (*Contact,error){
+func getContact(ctx context.Context, id int64) (*models.Contact,error){
 	db := createConnection()
 
 	queryStatement := `SELECT * FROM contacts WHERE id = $1`
 
-	var rows Contact
+	var contact models.Contact
 
-	err := db.GetContext(ctx,&rows,queryStatement,id)
+	err := db.GetContext(ctx,&contact,queryStatement,id)
 
 	if  err != nil {
 		return nil, err
 	}
 
-	return &rows, nil
+	return &contact, nil
 	
 }
 
 //insert contact 
-func insertContact(ctx context.Context,contact models.Contact) (int64,error) {
+func insertContact(ctx context.Context, contact models.Contact) (int64, error) {
 	db := createConnection()
 
 	queryStatement := `
@@ -206,4 +234,20 @@ func insertContact(ctx context.Context,contact models.Contact) (int64,error) {
 	}
 
 	return id, nil
+}
+
+//update contact 
+func updateContact(ctx context.Context, contact models.Contact)  error{
+	db := createConnection()
+
+	defer db.Close()
+	
+	queryStatement := `
+		UPDATE contacts SET name = :name, phone_number = :phone_number,
+		date_of_birth = :date_of_birth, remark = :remark WHERE 	id = :id;
+	`
+	_, err := db.NamedExecContext(ctx, queryStatement, contact)
+
+
+	return err;
 }
