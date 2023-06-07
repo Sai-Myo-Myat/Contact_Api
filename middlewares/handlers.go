@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -74,13 +75,15 @@ func GetAllContacts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	fmt.Println("Get all data")
+
 	json.NewEncoder(w).Encode(res)
 }
 
 //get one contact
 func GetContact(w http.ResponseWriter, r *http.Request){
 	var res contactResponse
-	var id int64
+	var id int64	
 	vars := mux.Vars(r)
 	idString :=vars["id"]
 	ctx := r.Context()
@@ -97,7 +100,6 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 	contact, err := getContact(ctx, id)
 
 	// fmt.Println("contact", contact, "error", err, "getContact")
-
 	if err != nil {
 		res = contactResponse{
 			Status: 404,
@@ -118,6 +120,8 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 func CreateContact(w http.ResponseWriter, r *http.Request){
 	ctx := r.Context()
 	var contact models.Contact
+
+	fmt.Println("body", r.Body)
 
 	err := json.NewDecoder(r.Body).Decode(&contact)
 
@@ -147,10 +151,17 @@ func CreateContact(w http.ResponseWriter, r *http.Request){
 
 //update contact
 func UpdateContacts(w http.ResponseWriter, r *http.Request){
+	var res response
 	idString := mux.Vars(r)["id"]
 	id, err := strconv.ParseInt(idString, 10, 64);
 
-	var res response
+	if err != nil {
+		res = response{
+			Status: 403,
+			Message: err.Error(),
+		}
+	}
+
 	ctx := r.Context()
 	var contact models.Contact
 
@@ -235,6 +246,8 @@ func DeleteContact(w http.ResponseWriter, r * http.Request){
 func getAllContacts(contacts *[]models.Contact) error {
 	db := createConnection()
 
+	defer db.Close()
+
 	queryStatement := `SELECT * FROM contacts`
 
 	err := db.Select(contacts, queryStatement)
@@ -255,7 +268,7 @@ func getContact(ctx context.Context, id int64) (*models.Contact,error){
 	if  err != nil {
 		return nil, err
 	}
-
+ 
 	return &contact, nil
 	
 }
@@ -263,6 +276,8 @@ func getContact(ctx context.Context, id int64) (*models.Contact,error){
 //insert contact 
 func insertContact(ctx context.Context, contact models.Contact) (int64, error) {
 	db := createConnection()
+
+	defer db.Close()
 
 	queryStatement := `
 	INSERT INTO contacts (name, phone_number, date_of_birth, remark) VALUES (:name, :phone_number, :date_of_birth, :remark)
@@ -273,6 +288,7 @@ func insertContact(ctx context.Context, contact models.Contact) (int64, error) {
 	var id int64
 
 	err = stmt.GetContext(ctx, &id ,contact)
+	fmt.Println(contact.Name, "date")
 	if err != nil {
 		return 0, err
 	}
