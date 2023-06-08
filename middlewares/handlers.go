@@ -21,7 +21,7 @@ type response struct {
 	Status int	`json:"status"`
 	Message string `json:"message"`
 	ID int64 `json:"contact_id"`
-	Data []models.Contact  `json:"data"`
+	Data []*models.Contact  `json:"data"`
 }
 
 type contactResponse struct {
@@ -56,11 +56,25 @@ func createConnection() *sqlx.DB {
 //get all contacts
 func GetAllContacts(w http.ResponseWriter, r *http.Request) {
 
-	var contacts []models.Contact
-
-	err := getAllContacts(&contacts)
-
 	var res response
+	ctx := r.Context();
+	query := r.URL.Query()
+	limit, err := strconv.ParseInt(query.Get("limit"), 10, 64)
+
+	if err != nil {
+		res = response {
+			Status: 403,
+			Message: err.Error(),
+		}
+	}
+	page, err := strconv.ParseInt(query.Get("page"), 10, 64)
+	if err != nil {
+		res = response {
+			Status: 403,
+			Message: err.Error(),
+		}
+	}
+	contacts,err := getAllContacts(ctx, limit, page)
 
 	if err != nil {
 		res = response{
@@ -75,7 +89,7 @@ func GetAllContacts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Println("Get all data")
+	fmt.Println("Get all data", limit, page)
 
 	json.NewEncoder(w).Encode(res)
 }
@@ -243,16 +257,30 @@ func DeleteContact(w http.ResponseWriter, r * http.Request){
 ///DATABASE FUNCTIONS
 
 //get all contacts
-func getAllContacts(contacts *[]models.Contact) error {
+func getAllContacts(ctx context.Context, limit, page int64) ([]*models.Contact,error) {
 	db := createConnection()
 
 	defer db.Close()
 
-	queryStatement := `SELECT * FROM contacts`
+	offset := limit * (page - 1);
+	args := map[string]any{
+		"limit": limit,
+		"offset": offset,
+	}
+	queryStatement := `SELECT * FROM contacts ORDER BY id DESC LIMIT :limit OFFSET :offset`
 
-	err := db.Select(contacts, queryStatement)
+	stmt, err := db.PrepareNamedContext(ctx,queryStatement)
 
-	return err
+	if err != nil {
+		return nil, err;
+	}
+
+	var contacts []*models.Contact;
+
+
+	err = stmt.SelectContext(ctx, &contacts, args)
+
+	return contacts, nil;
 }
 
 //get one contact
