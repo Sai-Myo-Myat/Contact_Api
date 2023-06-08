@@ -22,12 +22,20 @@ type response struct {
 	Message string `json:"message"`
 	ID int64 `json:"contact_id"`
 	Data []*models.Contact  `json:"data"`
+	Total int64 `json:"total"`
 }
 
 type contactResponse struct {
 	Status int	`json:"status"`
 	Message string `json:"message"`
 	Data *models.Contact  `json:"data"`
+}
+
+type contactList struct {
+	Status int `json:"status"`
+	Message string `json:"message"`
+	Contacts []*models.Contact `json:"contacts"`
+	Total int64 `json:"total"`
 }
 
 func createConnection() *sqlx.DB {
@@ -56,40 +64,60 @@ func createConnection() *sqlx.DB {
 //get all contacts
 func GetAllContacts(w http.ResponseWriter, r *http.Request) {
 
-	var res response
+	var res contactList
 	ctx := r.Context();
 	query := r.URL.Query()
-	limit, err := strconv.ParseInt(query.Get("limit"), 10, 64)
+	limit := int64(6)
+	limitString := query.Get("limit")
+	if limitString != "" {
+		l, err := strconv.ParseInt(limitString, 10, 64)
+
+		if err != nil {
+			w.WriteHeader(400)
+			res = contactList {
+				Status: 400,
+				Message: err.Error(),
+			}
+		}
+		limit = l
+	}
+	
+
+	offset := int64(0);
+	offsetString := query.Get("offset");
+	if offsetString != "" {
+		off, err := strconv.ParseInt(offsetString, 10, 64)
+
+		if err != nil {
+			w.WriteHeader(400)
+			res = contactList {
+				Status: 400,
+				Message: err.Error(),
+			}
+		}
+	 	offset= off
+	}
+
+	search := query.Get("search");
+
+	contacts,total,err := getAllContacts(ctx, limit, offset, search)
 
 	if err != nil {
-		res = response {
-			Status: 403,
-			Message: err.Error(),
-		}
-	}
-	page, err := strconv.ParseInt(query.Get("page"), 10, 64)
-	if err != nil {
-		res = response {
-			Status: 403,
-			Message: err.Error(),
-		}
-	}
-	contacts,err := getAllContacts(ctx, limit, page)
-
-	if err != nil {
-		res = response{
+		w.WriteHeader(500)
+		res = contactList{
 			Status: 500,
 			Message: err.Error(),
 		}
 	} else {
-		res = response{
+		res = contactList{
 			Status: 200,
 			Message: "success",
-			Data: contacts,
+			Contacts: contacts,
+			Total: total,
 		}
 	}
 
-	fmt.Println("Get all data", limit, page)
+	fmt.Println("Get all data", limit, offset)
 
 	json.NewEncoder(w).Encode(res)
 }
@@ -105,8 +133,9 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 	id, err := strconv.ParseInt(idString, 10, 64)
 
 	if err != nil {
-		res = contactResponse {
-			Status: 403,
+		w.WriteHeader(400)
+		res = contactResponse{
+			Status: 400,
 			Message: err.Error(),
 		}
 	}
@@ -115,6 +144,7 @@ func GetContact(w http.ResponseWriter, r *http.Request){
 
 	// fmt.Println("contact", contact, "error", err, "getContact")
 	if err != nil {
+		w.WriteHeader(404)
 		res = contactResponse{
 			Status: 404,
 			Message: err.Error(),
@@ -148,8 +178,9 @@ func CreateContact(w http.ResponseWriter, r *http.Request){
 	var res response
 
 	if  err != nil {
+		w.WriteHeader(400)
 		res = response{
-			Status: 403,
+			Status: 400,
 			Message: err.Error(),
 		}
 	}else {
@@ -170,8 +201,9 @@ func UpdateContacts(w http.ResponseWriter, r *http.Request){
 	id, err := strconv.ParseInt(idString, 10, 64);
 
 	if err != nil {
+		w.WriteHeader(400)
 		res = response{
-			Status: 403,
+			Status: 400,
 			Message: err.Error(),
 		}
 	}
@@ -184,8 +216,9 @@ func UpdateContacts(w http.ResponseWriter, r *http.Request){
 	contact.ID = id;
 
 	if err != nil {
+		w.WriteHeader(400)
 		res = response{
-			Status: 403,
+			Status: 400,
 			Message: err.Error(),
 		}
 	}
@@ -193,6 +226,7 @@ func UpdateContacts(w http.ResponseWriter, r *http.Request){
 	err = updateContact(ctx, contact)
 
 	if err != nil {
+		w.WriteHeader(404)
 		res = response{
 			Status: 404,
 			Message: err.Error(),
@@ -215,8 +249,9 @@ func DeleteContact(w http.ResponseWriter, r * http.Request){
 	id, err := strconv.ParseInt(idString, 10, 64);
 	var res response;
 	if err != nil {
+		w.WriteHeader(400)
 		res = response{
-			Status: 403,
+			Status: 400,
 			Message: err.Error(),
 		}
 	}
@@ -225,6 +260,7 @@ func DeleteContact(w http.ResponseWriter, r * http.Request){
 
 
 	if  err != nil {
+		w.WriteHeader(404)
 		res = response{
 			Status: 404,
 			Message: err.Error(),
@@ -234,11 +270,13 @@ func DeleteContact(w http.ResponseWriter, r * http.Request){
 	rowsAffected, err	:= result.RowsAffected()
 
 	if  err != nil {
+		w.WriteHeader(404)
 		res = response{
 			Status: 404,
 			Message: err.Error(),
 		}
 	}else if rowsAffected == 0{
+		w.WriteHeader(404)
 		res = response{
 			Status: 404,
 			Message: "There is no contact with this id",
@@ -257,30 +295,49 @@ func DeleteContact(w http.ResponseWriter, r * http.Request){
 ///DATABASE FUNCTIONS
 
 //get all contacts
-func getAllContacts(ctx context.Context, limit, page int64) ([]*models.Contact,error) {
+func getAllContacts(ctx context.Context, limit, offset int64, search string) ([]*models.Contact,int64,error) {
 	db := createConnection()
 
 	defer db.Close()
-
-	offset := limit * (page - 1);
 	args := map[string]any{
 		"limit": limit,
 		"offset": offset,
+		"name": search,
 	}
+
+	// query := ``
+
+	// if search != "" {
+	// 	query = `WHERE name :name`
+	// }
 	queryStatement := `SELECT * FROM contacts ORDER BY id DESC LIMIT :limit OFFSET :offset`
 
 	stmt, err := db.PrepareNamedContext(ctx,queryStatement)
 
 	if err != nil {
-		return nil, err;
+		return nil,0, err;
 	}
 
 	var contacts []*models.Contact;
 
 
 	err = stmt.SelectContext(ctx, &contacts, args)
+	if err != nil {
+		return nil,0,err
+	}
 
-	return contacts, nil;
+	getToTalContactQuery := `SELECT COUNT(*) FROM contacts`
+
+	totalContactStmt, err := db.PrepareNamedContext(ctx, getToTalContactQuery);
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int64;
+
+	err = totalContactStmt.GetContext(ctx, &total, args)
+
+	return contacts, total,  nil;
 }
 
 //get one contact
