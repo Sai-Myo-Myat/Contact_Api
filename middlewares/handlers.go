@@ -300,9 +300,9 @@ func getAllContacts(ctx context.Context, limit, offset int64, search string) ([]
 
 	defer db.Close()
 	args := map[string]any{
+		"search": search,
 		"limit": limit,
 		"offset": offset,
-		"name": search,
 	}
 
 	// query := ``
@@ -310,7 +310,18 @@ func getAllContacts(ctx context.Context, limit, offset int64, search string) ([]
 	// if search != "" {
 	// 	query = `WHERE name :name`
 	// }
-	queryStatement := `SELECT * FROM contacts ORDER BY id DESC LIMIT :limit OFFSET :offset`
+	queryStatement := `SELECT 
+		name,
+		phone_number,
+		date_of_birth,
+		remark 
+	FROM contacts`
+
+	if search != "" {
+		queryStatement += ` WHERE name LIKE :search`
+	}
+
+	queryStatement += ` ORDER BY id DESC LIMIT :limit OFFSET :offset`
 
 	stmt, err := db.PrepareNamedContext(ctx,queryStatement)
 
