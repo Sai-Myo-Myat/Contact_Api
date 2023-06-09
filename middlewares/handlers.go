@@ -117,7 +117,7 @@ func GetAllContacts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Println(contacts, "contacts")
+	// fmt.Println(contacts, "contacts")
 
 	fmt.Println("Get all data", limit, offset)
 
@@ -302,7 +302,7 @@ func getAllContacts(ctx context.Context, limit, offset int64, search string) ([]
 
 	defer db.Close()
 	args := map[string]any{
-		"search": search,
+		"search": search + "%",
 		"limit": limit,
 		"offset": offset,
 	}
