@@ -117,6 +117,8 @@ func GetAllContacts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	fmt.Println(contacts, "contacts")
+
 	fmt.Println("Get all data", limit, offset)
 
 	json.NewEncoder(w).Encode(res)
@@ -305,12 +307,8 @@ func getAllContacts(ctx context.Context, limit, offset int64, search string) ([]
 		"offset": offset,
 	}
 
-	// query := ``
-
-	// if search != "" {
-	// 	query = `WHERE name :name`
-	// }
 	queryStatement := `SELECT 
+		id,
 		name,
 		phone_number,
 		date_of_birth,
@@ -318,7 +316,7 @@ func getAllContacts(ctx context.Context, limit, offset int64, search string) ([]
 	FROM contacts`
 
 	if search != "" {
-		queryStatement += ` WHERE name LIKE :search`
+		queryStatement += ` WHERE name ILIKE :search`
 	}
 
 	queryStatement += ` ORDER BY id DESC LIMIT :limit OFFSET :offset`
